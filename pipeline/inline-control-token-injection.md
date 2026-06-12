@@ -6,22 +6,22 @@
 **Compatible with:** python, typescript, any
 
 ## Problem
-AI-generated text or speech outputs lack dynamic tone, style, or emotional modulation without rebuilding the entire prompt or switching models—responses feel flat, robotic, or contextually inappropriate
+Generated text or audio output lacks contextual tone variation, making AI responses feel robotic or emotionally flat even when the underlying content demands different registers (urgent legal deadline vs. reassuring contract summary)
 
 ## The Logic
-Embed structured control tokens directly inside the content string rather than passing style/emotion as separate API parameters. Pattern: prefix or mid-sentence tags like <|emotion:determination|> or <|style:formal|> are parsed by the generation pipeline to shift output character at that exact position. In a FastAPI context: def inject_controls(text: str, segments: list[dict]) -> str: # segments = [{'pos': 42, 'token': '<|emotion:determination|>'}] for seg in sorted(segments, key=lambda x: x['pos'], reverse=True): text = text[:seg['pos']] + seg['token'] + text[seg['pos']:] return text. The LLM or generation model reads these inline markers as first-class tokens, not metadata, enabling per-sentence or per-clause behavioral shifts in a single inference pass.
+Embed structured control tokens directly inside the content string at authoring or generation time rather than as separate API parameters. Pattern: '<|category:value|> text segment <|category:other_value|> next segment'. At render/synthesis time, a downstream processor strips tokens and applies the named modifier to the bracketed segment. In a text pipeline this means: 1) define a token schema {category: [allowed_values]}, 2) inject tokens at semantic boundaries in the output string, 3) strip tokens before display but use them to drive CSS class, voice style, or emphasis in the rendered output. Example for Draft Terminal: LLM output includes '<|urgency:high|> This clause expires in 3 days. <|urgency:normal|> The remaining sections are standard boilerplate.' Frontend parses tokens, renders high-urgency spans in red with alert icon, normal spans in default style. Same string works as plain text if token-stripping fallback fires.
 
 ## Steal This When
-- Draft Terminal needs to vary legal document tone per clause—e.g. assertive in operative clauses, neutral in recitals
-- Baby agent responses need confidence or urgency modulation without re-prompting
-- Greenlit AI feedback needs to shift between encouraging and critical tones inline within a single response
-- Any FastAPI endpoint generates structured text where different sections demand different register or style
+- LLM output needs to carry rendering or tone metadata without a separate structured field
+- you want a single string to be both human-readable fallback and machine-parseable for styled rendering
+- legal documents need urgency or risk-level annotation inline without breaking the prose
+- building a voice layer on top of existing text agent output
 
 ## Gotchas
-- Control tokens must be part of the model or parser vocabulary—injecting arbitrary tags into a standard LLM prompt does nothing unless the model was trained to recognize them; use prompt-level instructions as a fallback
-- Token injection positions shift if upstream text is modified after tagging—always inject at render time, not storage time
-- LanceDB stores raw text; store clean text, apply tokens at retrieval-to-generation boundary to avoid corrupting semantic embeddings
-- Mid-utterance control creates jarring transitions if overused—limit to clause or sentence boundaries in legal-tech contexts
+- Token schema must be strictly validated server-side before storage in Supabase or LanceDB to prevent injection via crafted input
+- LLM must be explicitly prompted with the token schema or it will hallucinate token syntax inconsistently
+- Token stripping regex must be applied before any embedding generation or the control tokens pollute vector semantics
+- If tokens span chunk boundaries during RAG retrieval the modifier context is lost, so chunk at token boundaries not arbitrary character counts
 
 ## Real Implementation
 https://huggingface.co/bosonai/higgs-audio-v3-tts-4b
